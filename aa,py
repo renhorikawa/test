@@ -1,0 +1,79 @@
+import pandas as pd
+import numpy as np
+
+def randomization_test_with_boundaries(df, n_permutations=1000, alpha=0.05):
+    patients = df['patient'].unique()
+    total_good = 0
+    total_bad = 0
+    c = 0  # 母数
+
+    for patient in patients:
+        data = df[df['patient'] == patient]
+        
+        # A期とB期のデータを取得
+        a_data = data[data['terms'] == 'A']['variable'].values
+        b_data = data[data['terms'] == 'B']['variable'].values
+        
+        # 3つの境界の候補
+        boundary_candidates = [len(a_data) - 1, len(a_data) - 2, len(a_data) - 3]
+
+        for boundary in boundary_candidates:
+            # A期とB期の全組み合わせを比較
+            for a in a_data:
+                for b in b_data:
+                    if b > a:
+                        total_good += 1
+                    elif b < a:
+                        total_bad += 1
+
+            # good-badの比率をCで割る
+            c += len(a_data) * len(b_data)
+
+    # ランダム化検定
+    ratios = []
+    for _ in range(n_permutations):
+        shuffled_data = df.copy()
+        shuffled_data['variable'] = np.random.permutation(shuffled_data['variable'].values)
+
+        good_count = 0
+        bad_count = 0
+
+        for patient in patients:
+            data = shuffled_data[shuffled_data['patient'] == patient]
+            a_data = data[data['terms'] == 'A']['variable'].values
+            b_data = data[data['terms'] == 'B']['variable'].values
+
+            for boundary in boundary_candidates:
+                for a in a_data:
+                    for b in b_data:
+                        if b > a:
+                            good_count += 1
+                        elif b < a:
+                            bad_count += 1
+
+        # 比率を計算
+        if bad_count > 0:  # ゼロ割りを防ぐ
+            ratio = good_count / bad_count
+            ratios.append(ratio)
+
+    # 元の比率を計算
+    observed_ratio = total_good / total_bad if total_bad > 0 else np.inf
+
+    # p値の計算
+    count_greater_or_equal = np.sum(np.array(ratios) >= observed_ratio)
+    p_value = count_greater_or_equal / n_permutations
+
+    # 有意性の判定
+    reject_null = p_value <= alpha
+
+    return total_good, total_bad, p_value, c, reject_null
+
+# 使用例
+df = pd.read_csv('deta2.csv')
+total_good, total_bad, p_value, c, reject_null = randomization_test_with_boundaries(df)
+
+print(f'Total Good: {total_good}')
+print(f'Total Bad: {total_bad}')
+print(f'P-value: {p_value}')
+print(f'C (Total Combinations): {c}')
+print(f'Reject Null Hypothesis: {reject_null}')
